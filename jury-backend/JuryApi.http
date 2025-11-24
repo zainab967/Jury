@@ -1,0 +1,418 @@
+### Jury Harmony API Test Requests
+### Update the base URL to match your running API
+
+@baseUrl = https://localhost:5001
+@token = Bearer YOUR_JWT_TOKEN_HERE
+
+### Variables
+@userId = 00000000-0000-0000-0000-000000000000
+@activityId = 00000000-0000-0000-0000-000000000000
+@expenseId = 00000000-0000-0000-0000-000000000000
+@penaltyId = 00000000-0000-0000-0000-000000000000
+@logId = 00000000-0000-0000-0000-000000000000
+@tierId = 00000000-0000-0000-0000-000000000000
+
+###############################################
+# USERS ENDPOINTS
+###############################################
+
+### Get all users (paginated)
+GET {{baseUrl}}/api/Users?page=1&pageSize=10
+Authorization: {{token}}
+Accept: application/json
+
+### Get all users - page 2
+GET {{baseUrl}}/api/Users?page=2&pageSize=10
+Authorization: {{token}}
+Accept: application/json
+
+### Get user by ID
+GET {{baseUrl}}/api/Users/{{userId}}
+Authorization: {{token}}
+Accept: application/json
+
+### Create user (JURY role required)
+POST {{baseUrl}}/api/Users
+Authorization: {{token}}
+Content-Type: application/json
+
+{
+  "name": "John Doe",
+  "email": "john.doe@example.com",
+  "password": "SecurePassword123!",
+  "role": 0
+}
+
+### Update user (JURY role required)
+PUT {{baseUrl}}/api/Users/{{userId}}
+Authorization: {{token}}
+Content-Type: application/json
+
+{
+  "id": "{{userId}}",
+  "name": "John Doe Updated",
+  "email": "john.updated@example.com",
+  "password": "NewPassword123!",
+  "role": 1
+}
+
+### Update user without password change
+PUT {{baseUrl}}/api/Users/{{userId}}
+Authorization: {{token}}
+Content-Type: application/json
+
+{
+  "id": "{{userId}}",
+  "name": "John Doe Updated",
+  "email": "john.updated@example.com",
+  "role": 1
+}
+
+### Delete user (JURY role required)
+DELETE {{baseUrl}}/api/Users/{{userId}}
+Authorization: {{token}}
+
+###############################################
+# ACTIVITIES ENDPOINTS
+###############################################
+
+### Get all activities (paginated)
+GET {{baseUrl}}/api/Activities?page=1&pageSize=10
+Authorization: {{token}}
+Accept: application/json
+
+### Get activity by ID
+GET {{baseUrl}}/api/Activities/{{activityId}}
+Authorization: {{token}}
+Accept: application/json
+
+### Create activity
+POST {{baseUrl}}/api/Activities
+Authorization: {{token}}
+Content-Type: application/json
+
+{
+  "name": "Team Meeting",
+  "description": "Monthly team sync meeting",
+  "date": "2024-01-15T10:00:00Z"
+}
+
+### Create activity without date (uses current date)
+POST {{baseUrl}}/api/Activities
+Authorization: {{token}}
+Content-Type: application/json
+
+{
+  "name": "Quick Activity",
+  "description": "No date specified"
+}
+
+### Update activity
+PUT {{baseUrl}}/api/Activities/{{activityId}}
+Authorization: {{token}}
+Content-Type: application/json
+
+{
+  "id": "{{activityId}}",
+  "name": "Team Meeting Updated",
+  "description": "Updated description",
+  "date": "2024-01-20T14:00:00Z"
+}
+
+### Delete activity
+DELETE {{baseUrl}}/api/Activities/{{activityId}}
+Authorization: {{token}}
+
+###############################################
+# EXPENSES ENDPOINTS
+###############################################
+
+### Get all expenses (paginated)
+GET {{baseUrl}}/api/Expenses?page=1&pageSize=10
+Authorization: {{token}}
+Accept: application/json
+
+### Get expenses by user ID
+GET {{baseUrl}}/api/Expenses?userId={{userId}}&page=1&pageSize=10
+Authorization: {{token}}
+Accept: application/json
+
+### Get expense by ID
+GET {{baseUrl}}/api/Expenses/{{expenseId}}
+Authorization: {{token}}
+Accept: application/json
+
+### Create expense
+POST {{baseUrl}}/api/Expenses
+Authorization: {{token}}
+Content-Type: application/json
+
+{
+  "userId": "{{userId}}",
+  "totalCollection": 5000.00,
+  "bill": 4500.00,
+  "arrears": 500.00,
+  "notes": "January monthly collection",
+  "status": "Paid",
+  "date": "2024-01-15T00:00:00Z"
+}
+
+### Update expense
+PUT {{baseUrl}}/api/Expenses/{{expenseId}}
+Authorization: {{token}}
+Content-Type: application/json
+
+{
+  "id": "{{expenseId}}",
+  "userId": "{{userId}}",
+  "totalCollection": 5500.00,
+  "bill": 5000.00,
+  "arrears": 500.00,
+  "notes": "Updated collection",
+  "status": "Pending",
+  "date": "2024-01-20T00:00:00Z"
+}
+
+### Delete expense
+DELETE {{baseUrl}}/api/Expenses/{{expenseId}}
+Authorization: {{token}}
+
+###############################################
+# PENALTIES ENDPOINTS
+###############################################
+
+### Get all penalties (paginated)
+GET {{baseUrl}}/api/Penalties?page=1&pageSize=10
+Authorization: {{token}}
+Accept: application/json
+
+### Get penalties by user ID
+GET {{baseUrl}}/api/Penalties?userId={{userId}}&page=1&pageSize=10
+Authorization: {{token}}
+Accept: application/json
+
+### Get penalty by ID
+GET {{baseUrl}}/api/Penalties/{{penaltyId}}
+Authorization: {{token}}
+Accept: application/json
+
+### Create penalty
+POST {{baseUrl}}/api/Penalties
+Authorization: {{token}}
+Content-Type: application/json
+
+{
+  "userId": "{{userId}}",
+  "category": "Late Payment",
+  "reason": "Payment delayed by 30 days",
+  "description": "Additional details about the penalty",
+  "amount": 500,
+  "status": "Pending",
+  "date": "2024-01-15T00:00:00Z"
+}
+
+### Update penalty
+PUT {{baseUrl}}/api/Penalties/{{penaltyId}}
+Authorization: {{token}}
+Content-Type: application/json
+
+{
+  "id": "{{penaltyId}}",
+  "userId": "{{userId}}",
+  "category": "Late Payment",
+  "reason": "Payment delayed by 45 days",
+  "description": "Updated description",
+  "amount": 750,
+  "status": "Paid",
+  "date": "2024-01-20T00:00:00Z"
+}
+
+### Delete penalty
+DELETE {{baseUrl}}/api/Penalties/{{penaltyId}}
+Authorization: {{token}}
+
+###############################################
+# LOGS ENDPOINTS
+###############################################
+
+### Get all logs (paginated)
+GET {{baseUrl}}/api/Logs?page=1&pageSize=10
+Authorization: {{token}}
+Accept: application/json
+
+### Get logs by user ID
+GET {{baseUrl}}/api/Logs?userId={{userId}}&page=1&pageSize=10
+Authorization: {{token}}
+Accept: application/json
+
+### Get log by ID
+GET {{baseUrl}}/api/Logs/{{logId}}
+Authorization: {{token}}
+Accept: application/json
+
+### Create log
+POST {{baseUrl}}/api/Logs
+Authorization: {{token}}
+Content-Type: application/json
+
+{
+  "userId": "{{userId}}",
+  "action": "User Login",
+  "result": "Success"
+}
+
+### Create log without result
+POST {{baseUrl}}/api/Logs
+Authorization: {{token}}
+Content-Type: application/json
+
+{
+  "userId": "{{userId}}",
+  "action": "View Dashboard"
+}
+
+### Update log
+PUT {{baseUrl}}/api/Logs/{{logId}}
+Authorization: {{token}}
+Content-Type: application/json
+
+{
+  "id": "{{logId}}",
+  "userId": "{{userId}}",
+  "action": "User Logout",
+  "result": "Success"
+}
+
+### Delete log
+DELETE {{baseUrl}}/api/Logs/{{logId}}
+Authorization: {{token}}
+
+###############################################
+# TIERS ENDPOINTS
+###############################################
+
+### Get all tiers (paginated)
+GET {{baseUrl}}/api/Tiers?page=1&pageSize=10
+Authorization: {{token}}
+Accept: application/json
+
+### Get tier by ID
+GET {{baseUrl}}/api/Tiers/{{tierId}}
+Authorization: {{token}}
+Accept: application/json
+
+### Create tier (JURY role required)
+POST {{baseUrl}}/api/Tiers
+Authorization: {{token}}
+Content-Type: application/json
+
+{
+  "name": "Premium Tier",
+  "description": "Premium membership tier with all features",
+  "costsJson": "{\"monthly\": 100, \"annual\": 1000, \"features\": [\"feature1\", \"feature2\"]}"
+}
+
+### Update tier (JURY role required)
+PUT {{baseUrl}}/api/Tiers/{{tierId}}
+Authorization: {{token}}
+Content-Type: application/json
+
+{
+  "id": "{{tierId}}",
+  "name": "Premium Tier Updated",
+  "description": "Updated description",
+  "costsJson": "{\"monthly\": 120, \"annual\": 1200}"
+}
+
+### Delete tier (JURY role required)
+DELETE {{baseUrl}}/api/Tiers/{{tierId}}
+Authorization: {{token}}
+
+###############################################
+# ERROR TESTING
+###############################################
+
+### Test validation error - invalid email
+POST {{baseUrl}}/api/Users
+Authorization: {{token}}
+Content-Type: application/json
+
+{
+  "name": "Test User",
+  "email": "invalid-email",
+  "password": "Password123!",
+  "role": 0
+}
+
+### Test validation error - missing required field
+POST {{baseUrl}}/api/Users
+Authorization: {{token}}
+Content-Type: application/json
+
+{
+  "name": "Test User"
+}
+
+### Test not found - invalid ID
+GET {{baseUrl}}/api/Users/00000000-0000-0000-0000-000000000000
+Authorization: {{token}}
+Accept: application/json
+
+### Test invalid pagination - page 0
+GET {{baseUrl}}/api/Users?page=0&pageSize=10
+Authorization: {{token}}
+Accept: application/json
+
+### Test invalid pagination - pageSize too large
+GET {{baseUrl}}/api/Users?page=1&pageSize=200
+Authorization: {{token}}
+Accept: application/json
+
+### Test duplicate email
+POST {{baseUrl}}/api/Users
+Authorization: {{token}}
+Content-Type: application/json
+
+{
+  "name": "Duplicate User",
+  "email": "existing@example.com",
+  "password": "Password123!",
+  "role": 0
+}
+
+### Test invalid foreign key - non-existent user
+POST {{baseUrl}}/api/Expenses
+Authorization: {{token}}
+Content-Type: application/json
+
+{
+  "userId": "00000000-0000-0000-0000-000000000000",
+  "totalCollection": 1000.00,
+  "bill": 900.00,
+  "arrears": 100.00,
+  "status": "Pending"
+}
+
+###############################################
+# PAGINATION TESTING
+###############################################
+
+### Test first page
+GET {{baseUrl}}/api/Users?page=1&pageSize=5
+Authorization: {{token}}
+Accept: application/json
+
+### Test second page
+GET {{baseUrl}}/api/Users?page=2&pageSize=5
+Authorization: {{token}}
+Accept: application/json
+
+### Test last page (adjust page number)
+GET {{baseUrl}}/api/Users?page=10&pageSize=5
+Authorization: {{token}}
+Accept: application/json
+
+### Test with filter and pagination
+GET {{baseUrl}}/api/Expenses?userId={{userId}}&page=1&pageSize=5
+Authorization: {{token}}
+Accept: application/json
