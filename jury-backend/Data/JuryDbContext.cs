@@ -21,6 +21,14 @@ namespace JuryApi.Data
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
+            // Global query filters for soft delete
+            modelBuilder.Entity<Activity>().HasQueryFilter(e => !e.IsDeleted);
+            modelBuilder.Entity<Expense>().HasQueryFilter(e => !e.IsDeleted);
+            modelBuilder.Entity<Log>().HasQueryFilter(e => !e.IsDeleted);
+            modelBuilder.Entity<Penalty>().HasQueryFilter(e => !e.IsDeleted);
+            modelBuilder.Entity<Tier>().HasQueryFilter(e => !e.IsDeleted);
+            modelBuilder.Entity<User>().HasQueryFilter(e => !e.IsDeleted);
+
             modelBuilder.Entity<Activity>(entity =>
             {
                 entity.ToTable("Activities");

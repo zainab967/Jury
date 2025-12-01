@@ -14,7 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
-import { DollarSign, Plus, Loader2, AlertTriangle, Trash2 } from "lucide-react"
+import { DollarSign, Plus, Loader2, AlertTriangle, Trash2, Download, FileSpreadsheet } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
 import {
   Table,
@@ -25,7 +25,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
-import { usersApi, expensesApi, activitiesApi } from "@/api"
+import { usersApi, expensesApi, activitiesApi, exportApi } from "@/api"
 import type { User } from "@/types"
 import type { Expense, CreateExpensePayload } from "@/api"
 
@@ -252,6 +252,32 @@ export default function Expenses() {
     }
   }, [expensesQuery.data, expensesQuery.isLoading, expensesQuery.isError, expensesQuery.error, usersQuery.isLoading, usersQuery.isError, usersQuery.error, activitiesQuery.isLoading, activitiesQuery.isError, activitiesQuery.error])
 
+  const [isExporting, setIsExporting] = useState(false)
+
+  const handleExport = async (format: "csv" | "excel") => {
+    setIsExporting(true)
+    try {
+      const blob = format === "csv"
+        ? await exportApi.exportExpensesToCsv()
+        : await exportApi.exportExpensesToExcel()
+      const filename = `expenses_export_${new Date().toISOString().split("T")[0]}.${format === "csv" ? "csv" : "xlsx"}`
+      exportApi.downloadBlob(blob, filename)
+      toast({
+        title: "Export successful",
+        description: `Expenses exported to ${format.toUpperCase()}`,
+      })
+    } catch (error: any) {
+      console.error("Export error:", error)
+      toast({
+        title: "Export failed",
+        description: error?.response?.data?.message || "Failed to export expenses",
+        variant: "destructive",
+      })
+    } finally {
+      setIsExporting(false)
+    }
+  }
+
   // Always render something - don't block on errors
   return (
     <div className="space-y-6">
@@ -259,20 +285,48 @@ export default function Expenses() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Expense Tracker</h1>
         </div>
-        {(expensesQuery.isError || usersQuery.isError || activitiesQuery.isError) && (
-          <Button 
-            variant="outline" 
+        <div className="flex gap-2">
+          <Button
             size="sm"
-            onClick={() => {
-              expensesQuery.refetch()
-              usersQuery.refetch()
-              activitiesQuery.refetch()
-            }}
+            variant="outline"
+            onClick={() => handleExport("csv")}
+            disabled={isExporting}
           >
-            <AlertTriangle className="h-4 w-4 mr-2" />
-            Retry
+            {isExporting ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <Download className="mr-2 h-4 w-4" />
+            )}
+            Export CSV
           </Button>
-        )}
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => handleExport("excel")}
+            disabled={isExporting}
+          >
+            {isExporting ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <FileSpreadsheet className="mr-2 h-4 w-4" />
+            )}
+            Export Excel
+          </Button>
+          {(expensesQuery.isError || usersQuery.isError || activitiesQuery.isError) && (
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => {
+                expensesQuery.refetch()
+                usersQuery.refetch()
+                activitiesQuery.refetch()
+              }}
+            >
+              <AlertTriangle className="h-4 w-4 mr-2" />
+              Retry
+            </Button>
+          )}
+        </div>
       </div>
 
       <div className="mb-6 p-4 rounded-md bg-muted text-muted-foreground text-sm flex items-start justify-between gap-3">

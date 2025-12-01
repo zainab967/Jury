@@ -8,6 +8,7 @@ using JuryApi.Data;
 using JuryApi.DTOs.Common;
 using JuryApi.DTOs.Tier;
 using JuryApi.Entities;
+using JuryApi.Helpers;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -151,17 +152,53 @@ namespace JuryApi.Controllers
         [RequireRole(UserRole.JURY)]
         public async Task<IActionResult> DeleteTier(Guid id, CancellationToken cancellationToken)
         {
-            var tier = await _context.Tiers.FirstOrDefaultAsync(t => t.Id == id, cancellationToken);
+            // Use IgnoreQueryFilters to include soft-deleted records for checking
+            var tier = await _context.Tiers
+                .IgnoreQueryFilters()
+                .FirstOrDefaultAsync(t => t.Id == id, cancellationToken);
+
+            if (tier is null || tier.IsDeleted)
+            {
+                return NotFound();
+            }
+
+            // Soft delete
+            tier.IsDeleted = true;
+            tier.DeletedAt = DateTime.UtcNow;
+            tier.DeletedBy = this.GetCurrentUserId();
+
+            await _context.SaveChangesAsync(cancellationToken);
+
+            return NoContent();
+        }
+
+        [HttpPost("{id:guid}/restore")]
+        [RequireRole(UserRole.JURY)]
+        public async Task<IActionResult> RestoreTier(Guid id, CancellationToken cancellationToken)
+        {
+            // Use IgnoreQueryFilters to find soft-deleted records
+            var tier = await _context.Tiers
+                .IgnoreQueryFilters()
+                .FirstOrDefaultAsync(t => t.Id == id, cancellationToken);
 
             if (tier is null)
             {
                 return NotFound();
             }
 
-            _context.Tiers.Remove(tier);
+            if (!tier.IsDeleted)
+            {
+                return BadRequest("Tier is not deleted.");
+            }
+
+            // Restore
+            tier.IsDeleted = false;
+            tier.DeletedAt = null;
+            tier.DeletedBy = null;
+
             await _context.SaveChangesAsync(cancellationToken);
 
-            return NoContent();
+            return Ok(new { message = "Tier restored successfully." });
         }
     }
 }

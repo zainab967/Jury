@@ -8,6 +8,7 @@ using JuryApi.Data;
 using JuryApi.DTOs.Common;
 using JuryApi.DTOs.User;
 using JuryApi.Entities;
+using JuryApi.Helpers;
 using JuryApi.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -165,32 +166,57 @@ namespace JuryApi.Controllers
         [RequireRole(UserRole.JURY)]
         public async Task<IActionResult> DeleteUser(Guid id, CancellationToken cancellationToken)
         {
+            // Use IgnoreQueryFilters to include soft-deleted records for checking
             var user = await _context.Users
+                .IgnoreQueryFilters()
                 .FirstOrDefaultAsync(u => u.Id == id, cancellationToken);
 
-            if (user is null)
+            if (user is null || user.IsDeleted)
             {
                 return NotFound();
             }
 
-            // Delete related entities first to avoid foreign key constraint issues
+            var currentUserId = this.GetCurrentUserId();
+
+            // Soft delete related entities
             var expenses = await _context.Expenses
-                .Where(e => e.UserId == id)
+                .IgnoreQueryFilters()
+                .Where(e => e.UserId == id && !e.IsDeleted)
                 .ToListAsync(cancellationToken);
-            _context.Expenses.RemoveRange(expenses);
+            foreach (var expense in expenses)
+            {
+                expense.IsDeleted = true;
+                expense.DeletedAt = DateTime.UtcNow;
+                expense.DeletedBy = currentUserId;
+            }
 
             var penalties = await _context.Penalties
-                .Where(p => p.UserId == id)
+                .IgnoreQueryFilters()
+                .Where(p => p.UserId == id && !p.IsDeleted)
                 .ToListAsync(cancellationToken);
-            _context.Penalties.RemoveRange(penalties);
+            foreach (var penalty in penalties)
+            {
+                penalty.IsDeleted = true;
+                penalty.DeletedAt = DateTime.UtcNow;
+                penalty.DeletedBy = currentUserId;
+            }
 
             var logs = await _context.Logs
-                .Where(l => l.UserId == id)
+                .IgnoreQueryFilters()
+                .Where(l => l.UserId == id && !l.IsDeleted)
                 .ToListAsync(cancellationToken);
-            _context.Logs.RemoveRange(logs);
+            foreach (var log in logs)
+            {
+                log.IsDeleted = true;
+                log.DeletedAt = DateTime.UtcNow;
+                log.DeletedBy = currentUserId;
+            }
 
-            // Now delete the user
-            _context.Users.Remove(user);
+            // Soft delete the user
+            user.IsDeleted = true;
+            user.DeletedAt = DateTime.UtcNow;
+            user.DeletedBy = currentUserId;
+
             await _context.SaveChangesAsync(cancellationToken);
 
             return NoContent();
@@ -256,6 +282,35 @@ namespace JuryApi.Controllers
                 await transaction.RollbackAsync(cancellationToken);
                 throw;
             }
+        }
+
+        [HttpPost("{id:guid}/restore")]
+        [RequireRole(UserRole.JURY)]
+        public async Task<IActionResult> RestoreUser(Guid id, CancellationToken cancellationToken)
+        {
+            // Use IgnoreQueryFilters to find soft-deleted records
+            var user = await _context.Users
+                .IgnoreQueryFilters()
+                .FirstOrDefaultAsync(u => u.Id == id, cancellationToken);
+
+            if (user is null)
+            {
+                return NotFound();
+            }
+
+            if (!user.IsDeleted)
+            {
+                return BadRequest("User is not deleted.");
+            }
+
+            // Restore
+            user.IsDeleted = false;
+            user.DeletedAt = null;
+            user.DeletedBy = null;
+
+            await _context.SaveChangesAsync(cancellationToken);
+
+            return Ok(new { message = "User restored successfully." });
         }
     }
 }

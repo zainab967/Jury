@@ -3,10 +3,12 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using JuryApi.Attributes;
 using JuryApi.Data;
 using JuryApi.DTOs.Activity;
 using JuryApi.DTOs.Common;
 using JuryApi.Entities;
+using JuryApi.Helpers;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -139,17 +141,53 @@ namespace JuryApi.Controllers
         [HttpDelete("{id:guid}")]
         public async Task<IActionResult> DeleteActivity(Guid id, CancellationToken cancellationToken)
         {
-            var activity = await _context.Activities.FirstOrDefaultAsync(a => a.Id == id, cancellationToken);
+            // Use IgnoreQueryFilters to include soft-deleted records for checking
+            var activity = await _context.Activities
+                .IgnoreQueryFilters()
+                .FirstOrDefaultAsync(a => a.Id == id, cancellationToken);
+
+            if (activity is null || activity.IsDeleted)
+            {
+                return NotFound();
+            }
+
+            // Soft delete
+            activity.IsDeleted = true;
+            activity.DeletedAt = DateTime.UtcNow;
+            activity.DeletedBy = this.GetCurrentUserId();
+
+            await _context.SaveChangesAsync(cancellationToken);
+
+            return NoContent();
+        }
+
+        [HttpPost("{id:guid}/restore")]
+        [RequireRole(UserRole.JURY)]
+        public async Task<IActionResult> RestoreActivity(Guid id, CancellationToken cancellationToken)
+        {
+            // Use IgnoreQueryFilters to find soft-deleted records
+            var activity = await _context.Activities
+                .IgnoreQueryFilters()
+                .FirstOrDefaultAsync(a => a.Id == id, cancellationToken);
 
             if (activity is null)
             {
                 return NotFound();
             }
 
-            _context.Activities.Remove(activity);
+            if (!activity.IsDeleted)
+            {
+                return BadRequest("Activity is not deleted.");
+            }
+
+            // Restore
+            activity.IsDeleted = false;
+            activity.DeletedAt = null;
+            activity.DeletedBy = null;
+
             await _context.SaveChangesAsync(cancellationToken);
 
-            return NoContent();
+            return Ok(new { message = "Activity restored successfully." });
         }
     }
 }

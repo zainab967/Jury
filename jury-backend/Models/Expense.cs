@@ -13,6 +13,9 @@ namespace JuryApi.Entities
         public string Status { get; set; } = null!;
         public DateTime Date { get; set; }
         public DateTime CreatedAt { get; set; }
+        public bool IsDeleted { get; set; } = false;
+        public DateTime? DeletedAt { get; set; }
+        public Guid? DeletedBy { get; set; }
 
         public virtual User User { get; set; } = null!;
     }

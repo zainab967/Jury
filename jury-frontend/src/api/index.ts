@@ -18,6 +18,7 @@ export { expensesApi } from "./expenses";
 export { logsApi } from "./logs";
 export { tiersApi } from "./tiers";
 export { authApi } from "./auth";
+export { exportApi } from "./export";
 
 // Export types
 export type { Activity, CreateActivityPayload, UpdateActivityPayload } from "./activities";

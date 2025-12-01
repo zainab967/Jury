@@ -9,6 +9,9 @@ namespace JuryApi.Entities
         public string Action { get; set; } = null!;
         public string? Result { get; set; }
         public DateTime CreatedAt { get; set; }
+        public bool IsDeleted { get; set; } = false;
+        public DateTime? DeletedAt { get; set; }
+        public Guid? DeletedBy { get; set; }
 
         public virtual User User { get; set; } = null!;
     }

@@ -38,9 +38,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { AlertTriangle, Loader2, Plus, RefreshCw } from "lucide-react";
+import { AlertTriangle, Loader2, Plus, RefreshCw, Download, FileSpreadsheet } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
-import { usersApi, penaltiesApi, logsApi } from "@/api";
+import { usersApi, penaltiesApi, logsApi, exportApi } from "@/api";
 import type { CreatePenaltyPayload, Penalty, User } from "@/types";
 
 type PenaltyCounts = Record<
@@ -517,23 +517,78 @@ const Penalties = () => {
     .filter(Boolean)
     .join(", ");
 
+  const [isExporting, setIsExporting] = useState(false);
+
+  const handleExport = async (format: "csv" | "excel") => {
+    setIsExporting(true);
+    try {
+      const userId = selectedUser !== "all" ? selectedUser : undefined;
+      const blob = format === "csv"
+        ? await exportApi.exportPenaltiesToCsv(userId)
+        : await exportApi.exportPenaltiesToExcel(userId);
+      const filename = `penalties_export_${new Date().toISOString().split("T")[0]}.${format === "csv" ? "csv" : "xlsx"}`;
+      exportApi.downloadBlob(blob, filename);
+      toast({
+        title: "Export successful",
+        description: `Penalties exported to ${format.toUpperCase()}`,
+      });
+    } catch (error: any) {
+      console.error("Export error:", error);
+      toast({
+        title: "Export failed",
+        description: error?.response?.data?.message || "Failed to export penalties",
+        variant: "destructive",
+      });
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold tracking-tight">Penalty Management</h1>
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={() => penaltiesQuery.refetch()}
-          disabled={penaltiesQuery.isFetching}
-        >
-          {penaltiesQuery.isFetching ? (
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          ) : (
-            <RefreshCw className="mr-2 h-4 w-4" />
-          )}
-          Refresh
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => handleExport("csv")}
+            disabled={isExporting}
+          >
+            {isExporting ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <Download className="mr-2 h-4 w-4" />
+            )}
+            Export CSV
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => handleExport("excel")}
+            disabled={isExporting}
+          >
+            {isExporting ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <FileSpreadsheet className="mr-2 h-4 w-4" />
+            )}
+            Export Excel
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => penaltiesQuery.refetch()}
+            disabled={penaltiesQuery.isFetching}
+          >
+            {penaltiesQuery.isFetching ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <RefreshCw className="mr-2 h-4 w-4" />
+            )}
+            Refresh
+          </Button>
+        </div>
       </div>
 
       <Tabs defaultValue="search" className="space-y-4">

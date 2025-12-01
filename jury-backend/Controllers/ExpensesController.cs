@@ -7,6 +7,8 @@ using JuryApi.Data;
 using JuryApi.DTOs.Common;
 using JuryApi.DTOs.Expense;
 using JuryApi.Entities;
+using JuryApi.Helpers;
+using JuryApi.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -19,10 +21,14 @@ namespace JuryApi.Controllers
     public class ExpensesController : ControllerBase
     {
         private readonly JuryDbContext _context;
+        private readonly IEmailService _emailService;
+        private readonly ILogger<ExpensesController> _logger;
 
-        public ExpensesController(JuryDbContext context)
+        public ExpensesController(JuryDbContext context, IEmailService emailService, ILogger<ExpensesController> logger)
         {
             _context = context;
+            _emailService = emailService;
+            _logger = logger;
         }
 
         [HttpGet]
@@ -132,7 +138,8 @@ namespace JuryApi.Controllers
                 return ValidationProblem(ModelState);
             }
 
-            if (!await _context.Users.AnyAsync(u => u.Id == request.UserId, cancellationToken))
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.Id == request.UserId, cancellationToken);
+            if (user == null)
             {
                 ModelState.AddModelError(nameof(request.UserId), $"User '{request.UserId}' was not found.");
                 return ValidationProblem(ModelState);
@@ -153,6 +160,24 @@ namespace JuryApi.Controllers
 
             _context.Expenses.Add(expense);
             await _context.SaveChangesAsync(cancellationToken);
+
+            // Send email notification asynchronously (fire and forget)
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await _emailService.SendExpenseAddedNotificationAsync(
+                        user.Email,
+                        user.Name,
+                        expense.TotalCollection,
+                        expense.Bill,
+                        expense.Arrears);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Failed to send expense notification email to {Email}", user.Email);
+                }
+            }, cancellationToken);
 
             var response = new ExpenseResponse
             {
@@ -207,17 +232,53 @@ namespace JuryApi.Controllers
         [HttpDelete("{id:guid}")]
         public async Task<IActionResult> DeleteExpense(Guid id, CancellationToken cancellationToken)
         {
-            var expense = await _context.Expenses.FirstOrDefaultAsync(e => e.Id == id, cancellationToken);
+            // Use IgnoreQueryFilters to include soft-deleted records for checking
+            var expense = await _context.Expenses
+                .IgnoreQueryFilters()
+                .FirstOrDefaultAsync(e => e.Id == id, cancellationToken);
+
+            if (expense is null || expense.IsDeleted)
+            {
+                return NotFound();
+            }
+
+            // Soft delete
+            expense.IsDeleted = true;
+            expense.DeletedAt = DateTime.UtcNow;
+            expense.DeletedBy = this.GetCurrentUserId();
+
+            await _context.SaveChangesAsync(cancellationToken);
+
+            return NoContent();
+        }
+
+        [HttpPost("{id:guid}/restore")]
+        [RequireRole(UserRole.JURY)]
+        public async Task<IActionResult> RestoreExpense(Guid id, CancellationToken cancellationToken)
+        {
+            // Use IgnoreQueryFilters to find soft-deleted records
+            var expense = await _context.Expenses
+                .IgnoreQueryFilters()
+                .FirstOrDefaultAsync(e => e.Id == id, cancellationToken);
 
             if (expense is null)
             {
                 return NotFound();
             }
 
-            _context.Expenses.Remove(expense);
+            if (!expense.IsDeleted)
+            {
+                return BadRequest("Expense is not deleted.");
+            }
+
+            // Restore
+            expense.IsDeleted = false;
+            expense.DeletedAt = null;
+            expense.DeletedBy = null;
+
             await _context.SaveChangesAsync(cancellationToken);
 
-            return NoContent();
+            return Ok(new { message = "Expense restored successfully." });
         }
     }
 }

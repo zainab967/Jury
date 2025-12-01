@@ -90,6 +90,16 @@ try
 
     builder.Services.AddScoped<IPasswordHasher, PasswordHasher>();
 
+    // Configure and register email services
+    builder.Services.Configure<EmailOptions>(builder.Configuration.GetSection(EmailOptions.SectionName));
+    builder.Services.AddScoped<IEmailService, EmailService>();
+    
+    // Register export service
+    builder.Services.AddScoped<IExportService, ExportService>();
+    
+    // Register background service for activity reminders
+    builder.Services.AddHostedService<ActivityReminderService>();
+
     var authSection = builder.Configuration.GetSection(AuthOptions.SectionName);
     var authOptions = authSection.Get<AuthOptions>() ?? new AuthOptions();
     var authEnabled = authOptions.HasRequiredKeys;

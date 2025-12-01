@@ -24,6 +24,9 @@ namespace JuryApi.Entities
         public string PasswordHash { get; set; } = null!;
         public UserRole Role { get; set; }
         public DateTime CreatedAt { get; set; }
+        public bool IsDeleted { get; set; } = false;
+        public DateTime? DeletedAt { get; set; }
+        public Guid? DeletedBy { get; set; }
 
         public virtual ICollection<Penalty> Penalties { get; set; }
         public virtual ICollection<Log> Logs { get; set; }

@@ -7,6 +7,8 @@ using JuryApi.Data;
 using JuryApi.DTOs.Common;
 using JuryApi.DTOs.Penalty;
 using JuryApi.Entities;
+using JuryApi.Helpers;
+using JuryApi.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -19,10 +21,14 @@ namespace JuryApi.Controllers
     public class PenaltiesController : ControllerBase
     {
         private readonly JuryDbContext _context;
+        private readonly IEmailService _emailService;
+        private readonly ILogger<PenaltiesController> _logger;
 
-        public PenaltiesController(JuryDbContext context)
+        public PenaltiesController(JuryDbContext context, IEmailService emailService, ILogger<PenaltiesController> logger)
         {
             _context = context;
+            _emailService = emailService;
+            _logger = logger;
         }
 
         [HttpGet]
@@ -122,7 +128,8 @@ namespace JuryApi.Controllers
         [HttpPost]
         public async Task<ActionResult<PenaltyResponse>> CreatePenalty([FromBody] CreatePenaltyRequest request, CancellationToken cancellationToken)
         {
-            if (!await _context.Users.AnyAsync(u => u.Id == request.UserId, cancellationToken))
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.Id == request.UserId, cancellationToken);
+            if (user == null)
             {
                 ModelState.AddModelError(nameof(request.UserId), $"User '{request.UserId}' was not found.");
                 return ValidationProblem(ModelState);
@@ -143,6 +150,24 @@ namespace JuryApi.Controllers
 
             _context.Penalties.Add(penalty);
             await _context.SaveChangesAsync(cancellationToken);
+
+            // Send email notification asynchronously (fire and forget)
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await _emailService.SendPenaltyAddedNotificationAsync(
+                        user.Email,
+                        user.Name,
+                        penalty.Category,
+                        penalty.Reason,
+                        penalty.Amount);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Failed to send penalty notification email to {Email}", user.Email);
+                }
+            }, cancellationToken);
 
             var response = new PenaltyResponse
             {
@@ -197,17 +222,79 @@ namespace JuryApi.Controllers
         [HttpDelete("{id:guid}")]
         public async Task<IActionResult> DeletePenalty(Guid id, CancellationToken cancellationToken)
         {
-            var penalty = await _context.Penalties.FirstOrDefaultAsync(p => p.Id == id, cancellationToken);
+            // Use IgnoreQueryFilters to include soft-deleted records for checking
+            var penalty = await _context.Penalties
+                .IgnoreQueryFilters()
+                .Include(p => p.User)
+                .FirstOrDefaultAsync(p => p.Id == id, cancellationToken);
+
+            if (penalty is null || penalty.IsDeleted)
+            {
+                return NotFound();
+            }
+
+            // Store penalty details before soft deletion for email notification
+            var user = penalty.User;
+            var category = penalty.Category;
+            var reason = penalty.Reason;
+
+            // Soft delete
+            penalty.IsDeleted = true;
+            penalty.DeletedAt = DateTime.UtcNow;
+            penalty.DeletedBy = this.GetCurrentUserId();
+
+            await _context.SaveChangesAsync(cancellationToken);
+
+            // Send email notification asynchronously (fire and forget)
+            if (user != null)
+            {
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        await _emailService.SendPenaltyDeletedNotificationAsync(
+                            user.Email,
+                            user.Name,
+                            category,
+                            reason);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Failed to send penalty deletion notification email to {Email}", user.Email);
+                    }
+                }, cancellationToken);
+            }
+
+            return NoContent();
+        }
+
+        [HttpPost("{id:guid}/restore")]
+        [RequireRole(UserRole.JURY)]
+        public async Task<IActionResult> RestorePenalty(Guid id, CancellationToken cancellationToken)
+        {
+            // Use IgnoreQueryFilters to find soft-deleted records
+            var penalty = await _context.Penalties
+                .IgnoreQueryFilters()
+                .FirstOrDefaultAsync(p => p.Id == id, cancellationToken);
 
             if (penalty is null)
             {
                 return NotFound();
             }
 
-            _context.Penalties.Remove(penalty);
+            if (!penalty.IsDeleted)
+            {
+                return BadRequest("Penalty is not deleted.");
+            }
+
+            // Restore
+            penalty.IsDeleted = false;
+            penalty.DeletedAt = null;
+            penalty.DeletedBy = null;
+
             await _context.SaveChangesAsync(cancellationToken);
 
-            return NoContent();
+            return Ok(new { message = "Penalty restored successfully." });
         }
     }
 }
