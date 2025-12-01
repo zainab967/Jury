@@ -49,5 +49,15 @@ export const usersApi = {
   delete: async (id: string): Promise<void> => {
     await apiClient.delete(`/users/${id}`);
   },
+
+  /**
+   * Appoint new jury members (replaces current jury)
+   */
+  appointJury: async (userIds: string[]): Promise<{ message: string }> => {
+    const response = await apiClient.post<{ message: string }>("/users/appoint-jury", {
+      userIds: userIds,
+    });
+    return response.data;
+  },
 };
 

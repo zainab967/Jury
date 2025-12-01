@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using JuryApi.Data;
 using JuryApi.Entities;
@@ -23,17 +24,56 @@ namespace JuryApi.Services
         private readonly IJwtService _jwtService;
         private readonly IPasswordHasher _passwordHasher;
         private readonly ILogger<AuthService> _logger;
+        private readonly IHostEnvironment _environment;
 
-        public AuthService(JuryDbContext context, IJwtService jwtService, IPasswordHasher passwordHasher, ILogger<AuthService> logger)
+        public AuthService(JuryDbContext context, IJwtService jwtService, IPasswordHasher passwordHasher, ILogger<AuthService> logger, IHostEnvironment environment)
         {
             _context = context;
             _jwtService = jwtService;
             _passwordHasher = passwordHasher;
             _logger = logger;
+            _environment = environment;
         }
 
         public async Task<LoginResponse?> LoginAsync(LoginRequest request, string ipAddress)
         {
+            // Development mode: bypass database checks and use simple password-based authentication
+            if (_environment.IsDevelopment())
+            {
+                UserRole role;
+                if (request.Password.Equals("jury", StringComparison.OrdinalIgnoreCase))
+                {
+                    role = UserRole.JURY;
+                }
+                else if (request.Password.Equals("employee", StringComparison.OrdinalIgnoreCase))
+                {
+                    role = UserRole.EMPLOYEE;
+                }
+                else
+                {
+                    return null; // Invalid password in dev mode
+                }
+
+                // Create a mock user object for development
+                var devUser = new User
+                {
+                    Id = Guid.NewGuid(),
+                    Name = string.IsNullOrWhiteSpace(request.Email) ? "Dev User" : request.Email.Split('@')[0],
+                    Email = string.IsNullOrWhiteSpace(request.Email) ? "dev@example.com" : request.Email,
+                    PasswordHash = "", // Not needed in dev mode
+                    Role = role,
+                    CreatedAt = DateTime.UtcNow
+                };
+
+                var devLoginResponse = _jwtService.GenerateTokens(devUser, ipAddress);
+                
+                // Skip refresh token storage in dev mode to avoid DB issues
+                _logger.LogInformation("Development mode: Login successful for {Email} with role {Role}", devUser.Email, role);
+                
+                return devLoginResponse;
+            }
+
+            // Production mode: use database authentication
             var user = await _context.Users
                 .FirstOrDefaultAsync(u => u.Email == request.Email);
 

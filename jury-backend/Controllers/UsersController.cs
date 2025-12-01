@@ -195,6 +195,68 @@ namespace JuryApi.Controllers
 
             return NoContent();
         }
+
+        [HttpPost("appoint-jury")]
+        [RequireRole(UserRole.JURY)]
+        public async Task<IActionResult> AppointJury([FromBody] AppointJuryRequest request, CancellationToken cancellationToken)
+        {
+            // Validate request
+            if (request.UserIds == null || request.UserIds.Count < 2 || request.UserIds.Count > 3)
+            {
+                ModelState.AddModelError(nameof(request.UserIds), "You must select between 2 and 3 users.");
+                return ValidationProblem(ModelState);
+            }
+
+            // Check for duplicate IDs
+            if (request.UserIds.Distinct().Count() != request.UserIds.Count)
+            {
+                ModelState.AddModelError(nameof(request.UserIds), "Duplicate user IDs are not allowed.");
+                return ValidationProblem(ModelState);
+            }
+
+            // Verify all selected users exist
+            var selectedUsers = await _context.Users
+                .Where(u => request.UserIds.Contains(u.Id))
+                .ToListAsync(cancellationToken);
+
+            if (selectedUsers.Count != request.UserIds.Count)
+            {
+                var missingIds = request.UserIds.Except(selectedUsers.Select(u => u.Id)).ToList();
+                ModelState.AddModelError(nameof(request.UserIds), $"One or more selected users do not exist. Missing IDs: {string.Join(", ", missingIds)}");
+                return ValidationProblem(ModelState);
+            }
+
+            // Use transaction to ensure atomicity
+            using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
+            try
+            {
+                // Step 1: Set all current JURY users to EMPLOYEE
+                var currentJuryUsers = await _context.Users
+                    .Where(u => u.Role == UserRole.JURY)
+                    .ToListAsync(cancellationToken);
+
+                foreach (var juryUser in currentJuryUsers)
+                {
+                    juryUser.Role = UserRole.EMPLOYEE;
+                }
+
+                // Step 2: Set selected users to JURY
+                foreach (var selectedUser in selectedUsers)
+                {
+                    selectedUser.Role = UserRole.JURY;
+                }
+
+                await _context.SaveChangesAsync(cancellationToken);
+                await transaction.CommitAsync(cancellationToken);
+
+                return Ok(new { message = "Jury members have been successfully appointed." });
+            }
+            catch (Exception)
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                throw;
+            }
+        }
     }
 }
 

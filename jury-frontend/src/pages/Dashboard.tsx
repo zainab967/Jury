@@ -1,9 +1,10 @@
 
 import { useState, useEffect } from "react"
+import { useNavigate } from "react-router-dom"
 import { useUser } from "@/contexts/UserContext"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { usersApi, penaltiesApi, logsApi } from "@/api"
+import { usersApi, penaltiesApi, logsApi, authApi } from "@/api"
 import type { User, CreatePenaltyPayload } from "@/types"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -38,7 +39,8 @@ import {
   Coffee,
   CheckCircle,
   Info,
-  Eye
+  Eye,
+  UserPlus
 } from "lucide-react"
 import {
   Tooltip,
@@ -48,6 +50,7 @@ import {
 } from "@/components/ui/tooltip"
 import { useToast } from "@/hooks/use-toast"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 
 const mischief_items = [
   {
@@ -130,9 +133,22 @@ const stats = [
 ]
 
 export default function Dashboard() {
-  const { isJury, user } = useUser()
+  const { isJury, user, setUser } = useUser()
   const { toast } = useToast()
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
+  
+  // Safety check - if user is not set, show loading or redirect
+  if (!user) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <p className="text-muted-foreground">Loading...</p>
+        </div>
+      </div>
+    )
+  }
+  
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [selectedCategory, setSelectedCategory] = useState("")
   const [selectedMembers, setSelectedMembers] = useState<string[]>([]) // Now stores user IDs
@@ -142,14 +158,40 @@ export default function Dashboard() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [reason, setReason] = useState("")
   const [description, setDescription] = useState("")
+  
+  // New Jury appointment state
+  const [isNewJuryDialogOpen, setIsNewJuryDialogOpen] = useState(false)
+  const [selectedJuryMembers, setSelectedJuryMembers] = useState<string[]>([])
+  const [isAppointingJury, setIsAppointingJury] = useState(false)
 
-  // Fetch users from API
+  // Fetch users from API - with error handling to prevent blank screen
   const usersQuery = useQuery<User[]>({
     queryKey: ["users"],
-    queryFn: () => usersApi.getAll(),
+    queryFn: async () => {
+      try {
+        return await usersApi.getAll()
+      } catch (error: any) {
+        console.error("Failed to fetch users:", error)
+        // Return empty array instead of throwing to prevent component crash
+        return []
+      }
+    },
+    retry: 1,
+    staleTime: 5 * 60 * 1000, // 5 minutes
   })
 
   const users = (usersQuery.data && Array.isArray(usersQuery.data)) ? usersQuery.data : []
+  
+  // Log errors for debugging
+  useEffect(() => {
+    if (usersQuery.isError) {
+      console.error("Users query error:", usersQuery.error)
+      // Show a non-blocking error message
+      if (usersQuery.error) {
+        console.warn("Users API call failed - dashboard will render with limited functionality")
+      }
+    }
+  }, [usersQuery.isError, usersQuery.error])
 
   const handleMemberToggle = (userId: string) => {
     setSelectedMembers(prev => 
@@ -270,7 +312,15 @@ export default function Dashboard() {
           <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
         </div>
         {isJury && (
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setIsNewJuryDialogOpen(true)}
+            >
+              <UserPlus className="h-4 w-4 mr-2" />
+              New Jury
+            </Button>
+            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogContent className="w-[95vw] max-w-2xl sm:mx-auto max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>Add Penalty</DialogTitle>
@@ -390,8 +440,181 @@ export default function Dashboard() {
               </div>
             </DialogContent>
           </Dialog>
+          </div>
         )}
       </div>
+
+      {/* New Jury Appointment Dialog */}
+      {isJury && (
+        <Dialog open={isNewJuryDialogOpen} onOpenChange={setIsNewJuryDialogOpen}>
+          <DialogContent className="w-[95vw] max-w-2xl sm:mx-auto max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Appoint New Jury</DialogTitle>
+              <DialogDescription>
+                Select 2-3 users to appoint as new jury members
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <Alert variant="destructive">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertDescription>
+                  <strong>Important:</strong> Once you save the new jury, you will lose jury access and return to employee view (personal details only).
+                </AlertDescription>
+              </Alert>
+
+              <div className="space-y-2">
+                <Label>Select Jury Members (2-3 required)</Label>
+                <div className="border rounded-lg p-4 max-h-64 overflow-y-auto">
+                  <div className="space-y-2">
+                    {usersQuery.isLoading ? (
+                      <div className="space-y-2">
+                        {[...Array(5)].map((_, i) => (
+                          <div key={i} className="flex items-center space-x-2">
+                            <Skeleton className="h-4 w-4 rounded" />
+                            <Skeleton className="h-4 w-32" />
+                          </div>
+                        ))}
+                      </div>
+                    ) : users.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">No users available</p>
+                    ) : (
+                      users
+                        .filter(u => u.id !== user?.id) // Exclude current user
+                        .map((userItem) => (
+                          <div key={userItem.id} className="flex items-center space-x-2">
+                            <input
+                              type="checkbox"
+                              id={`jury-member-${userItem.id}`}
+                              checked={selectedJuryMembers.includes(userItem.id)}
+                              onChange={() => {
+                                if (selectedJuryMembers.includes(userItem.id)) {
+                                  setSelectedJuryMembers(prev => prev.filter(id => id !== userItem.id))
+                                } else {
+                                  if (selectedJuryMembers.length < 3) {
+                                    setSelectedJuryMembers(prev => [...prev, userItem.id])
+                                  } else {
+                                    toast({
+                                      title: "Selection Limit",
+                                      description: "You can select a maximum of 3 users.",
+                                      variant: "destructive"
+                                    })
+                                  }
+                                }
+                              }}
+                              className="rounded"
+                              disabled={isAppointingJury}
+                            />
+                            <Label htmlFor={`jury-member-${userItem.id}`} className="cursor-pointer">
+                              {userItem.name} {userItem.role === "JURY" && <Badge variant="secondary" className="ml-2">Current Jury</Badge>}
+                            </Label>
+                          </div>
+                        ))
+                    )}
+                  </div>
+                </div>
+                {selectedJuryMembers.length > 0 && (
+                  <p className="text-sm text-muted-foreground">
+                    Selected ({selectedJuryMembers.length}/3): {selectedJuryMembers.map(id => users.find(u => u.id === id)?.name).filter(Boolean).join(", ")}
+                  </p>
+                )}
+                {selectedJuryMembers.length > 0 && selectedJuryMembers.length < 2 && (
+                  <p className="text-sm text-destructive">
+                    Please select at least 2 users (currently {selectedJuryMembers.length})
+                  </p>
+                )}
+              </div>
+
+              <Button 
+                className="w-full" 
+                onClick={async () => {
+                  if (selectedJuryMembers.length < 2 || selectedJuryMembers.length > 3) {
+                    toast({
+                      title: "Invalid Selection",
+                      description: "Please select between 2 and 3 users.",
+                      variant: "destructive"
+                    })
+                    return
+                  }
+
+                  setIsAppointingJury(true)
+                  try {
+                    await usersApi.appointJury(selectedJuryMembers)
+                    
+                    // Refresh current user to get updated role
+                    const updatedUser = await authApi.getCurrentUser()
+                    
+                    // Map role similar to login
+                    const roleValue = updatedUser.role
+                    const roleStr = String(roleValue).toUpperCase()
+                    let frontendRole: "jury" | "employee" = "employee"
+                    
+                    if (
+                      roleStr === "JURY" || 
+                      roleValue === 1 || 
+                      roleStr === "1" ||
+                      roleValue === "JURY" ||
+                      roleValue === "jury" ||
+                      roleValue === "Jury"
+                    ) {
+                      frontendRole = "jury"
+                    } else if (
+                      roleStr === "EMPLOYEE" || 
+                      roleValue === 0 || 
+                      roleStr === "0" ||
+                      roleValue === "EMPLOYEE" ||
+                      roleValue === "employee" ||
+                      roleValue === "Employee"
+                    ) {
+                      frontendRole = "employee"
+                    }
+                    
+                    setUser({
+                      id: updatedUser.id,
+                      name: updatedUser.name,
+                      role: frontendRole,
+                    })
+
+                    // Invalidate queries to refresh data
+                    queryClient.invalidateQueries({ queryKey: ["users"] })
+                    
+                    setIsNewJuryDialogOpen(false)
+                    setSelectedJuryMembers([])
+                    
+                    toast({
+                      title: "Success!",
+                      description: "New jury members have been appointed. You now have employee access.",
+                    })
+                    
+                    // The ProtectedRoute will automatically redirect if needed
+                  } catch (error: any) {
+                    console.error("Failed to appoint jury:", error)
+                    toast({
+                      title: "Error",
+                      description: error?.response?.data?.message || error?.message || "Failed to appoint jury. Please try again.",
+                      variant: "destructive"
+                    })
+                  } finally {
+                    setIsAppointingJury(false)
+                  }
+                }}
+                disabled={isAppointingJury || selectedJuryMembers.length < 2 || selectedJuryMembers.length > 3}
+              >
+                {isAppointingJury ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current mr-2" />
+                    Appointing Jury...
+                  </>
+                ) : (
+                  <>
+                    <UserPlus className="h-4 w-4 mr-2" />
+                    Save New Jury ({selectedJuryMembers.length} member{selectedJuryMembers.length !== 1 ? 's' : ''})
+                  </>
+                )}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
 
       {/* Stats Grid */}
       {isJury && (

@@ -99,6 +99,25 @@ export default function Login() {
       console.error("Login error:", error)
       console.error("Error response:", error?.response?.data)
       console.error("Error status:", error?.response?.status)
+      console.error("Error code:", error?.code)
+      console.error("Error message:", error?.message)
+      
+      // Handle network errors (no response from server)
+      if (!error?.response) {
+        const isNetworkError = error?.code === "ERR_NETWORK" || 
+                              error?.code === "ECONNREFUSED" ||
+                              error?.message?.includes("Network Error") ||
+                              error?.message?.includes("Failed to fetch")
+        
+        if (isNetworkError) {
+          toast({
+            title: "Connection Error",
+            description: "Cannot connect to the server. Please make sure the backend is running on http://localhost:5163",
+            variant: "destructive"
+          })
+          return
+        }
+      }
       
       // Handle validation errors (400 Bad Request from ValidationProblem)
       let errorMessage = "Invalid email or password"
@@ -120,6 +139,8 @@ export default function Login() {
         } else if (responseData?.error?.message) {
           errorMessage = responseData.error.message
         }
+      } else if (error?.response?.status === 401) {
+        errorMessage = "Invalid email or password"
       } else if (error?.response?.data?.message) {
         errorMessage = error.response.data.message
       } else if (error?.message) {
