@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using JuryApi.Attributes;
 using JuryApi.Data;
 using JuryApi.DTOs.Common;
 using JuryApi.DTOs.Expense;

@@ -7,9 +7,11 @@ using JuryApi.Options;
 using JuryApi.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.IdentityModel.Tokens;
 using Serilog;
 
@@ -67,16 +69,40 @@ try
         {
             if (frontendOrigins.Length == 0)
             {
-                policy.AllowAnyOrigin()
-                      .AllowAnyHeader()
-                      .AllowAnyMethod()
-                      .SetPreflightMaxAge(TimeSpan.FromSeconds(86400));
+                // In production, you should always specify origins
+                // This fallback is only for development/testing
+                if (builder.Environment.IsDevelopment())
+                {
+                    policy.AllowAnyOrigin()
+                          .AllowAnyHeader()
+                          .AllowAnyMethod()
+                          .SetPreflightMaxAge(TimeSpan.FromSeconds(86400));
+                }
+                else
+                {
+                    throw new InvalidOperationException(
+                        "CORS origins must be configured in 'Frontend:Origins' for production environments.");
+                }
             }
             else
             {
                 policy.WithOrigins(frontendOrigins)
-                      .AllowAnyHeader()
-                      .AllowAnyMethod()
+                      .AllowCredentials()
+                      .WithHeaders(
+                          "Content-Type",
+                          "Authorization",
+                          "X-Requested-With",
+                          "Accept",
+                          "Origin",
+                          "Access-Control-Request-Method",
+                          "Access-Control-Request-Headers")
+                      .WithMethods(
+                          "GET",
+                          "POST",
+                          "PUT",
+                          "DELETE",
+                          "PATCH",
+                          "OPTIONS")
                       .SetPreflightMaxAge(TimeSpan.FromSeconds(86400));
             }
         });
@@ -87,6 +113,14 @@ try
 
     builder.Services.AddDbContext<JuryDbContext>(options =>
         options.UseSqlServer(connectionString));
+
+    // Add health checks
+    builder.Services.AddHealthChecks()
+        .AddCheck("self", () => HealthCheckResult.Healthy(), tags: new[] { "self" })
+        .AddDbContextCheck<JuryDbContext>(
+            name: "database",
+            failureStatus: HealthStatus.Unhealthy,
+            tags: new[] { "db", "sqlserver", "ready" });
 
     builder.Services.AddScoped<IPasswordHasher, PasswordHasher>();
 
@@ -188,6 +222,73 @@ try
     }
     
     app.UseAuthorization();
+    
+    // Map health check endpoints
+    app.MapHealthChecks("/health", new HealthCheckOptions
+    {
+        Predicate = _ => true,
+        ResponseWriter = async (context, report) =>
+        {
+            context.Response.ContentType = "application/json";
+            var result = System.Text.Json.JsonSerializer.Serialize(new
+            {
+                status = report.Status.ToString(),
+                checks = report.Entries.Select(e => new
+                {
+                    name = e.Key,
+                    status = e.Value.Status.ToString(),
+                    description = e.Value.Description,
+                    exception = e.Value.Exception?.Message,
+                    duration = e.Value.Duration.TotalMilliseconds
+                })
+            }, new JsonSerializerOptions { WriteIndented = true });
+            await context.Response.WriteAsync(result);
+        }
+    });
+
+    app.MapHealthChecks("/health/ready", new HealthCheckOptions
+    {
+        Predicate = check => check.Tags.Contains("ready"),
+        ResponseWriter = async (context, report) =>
+        {
+            context.Response.ContentType = "application/json";
+            var result = System.Text.Json.JsonSerializer.Serialize(new
+            {
+                status = report.Status.ToString(),
+                checks = report.Entries.Select(e => new
+                {
+                    name = e.Key,
+                    status = e.Value.Status.ToString(),
+                    description = e.Value.Description,
+                    exception = e.Value.Exception?.Message,
+                    duration = e.Value.Duration.TotalMilliseconds
+                })
+            }, new JsonSerializerOptions { WriteIndented = true });
+            await context.Response.WriteAsync(result);
+        }
+    });
+
+    app.MapHealthChecks("/health/live", new HealthCheckOptions
+    {
+        Predicate = check => check.Tags.Contains("self"),
+        ResponseWriter = async (context, report) =>
+        {
+            context.Response.ContentType = "application/json";
+            var result = System.Text.Json.JsonSerializer.Serialize(new
+            {
+                status = report.Status.ToString(),
+                checks = report.Entries.Select(e => new
+                {
+                    name = e.Key,
+                    status = e.Value.Status.ToString(),
+                    description = e.Value.Description,
+                    duration = e.Value.Duration.TotalMilliseconds
+                })
+            }, new JsonSerializerOptions { WriteIndented = true });
+            await context.Response.WriteAsync(result);
+        }
+    });
+    
     app.MapControllers();
 
     try

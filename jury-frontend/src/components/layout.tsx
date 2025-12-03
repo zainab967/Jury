@@ -9,7 +9,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       <div className="min-h-screen flex w-full">
         <AppSidebar />
         <main className="flex-1 flex flex-col w-full">
-          <header className="h-16 sticky top-0 z-50 bg-white/95 border-b shadow-sm flex items-center">
+          <header className="h-16 sticky top-0 z-50 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b border-border shadow-sm flex items-center">
             <div className="flex h-16 items-center px-6 w-full">
               <SidebarTrigger className="mr-4" />
               <div className="flex-1 min-w-0">

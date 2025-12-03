@@ -14,7 +14,13 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
-import { DollarSign, Plus, Loader2, AlertTriangle, Trash2, Download, FileSpreadsheet } from "lucide-react"
+import { DollarSign, Plus, Loader2, AlertTriangle, Trash2, Download, FileSpreadsheet, FileText } from "lucide-react"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { Skeleton } from "@/components/ui/skeleton"
 import {
   Table,
@@ -254,13 +260,24 @@ export default function Expenses() {
 
   const [isExporting, setIsExporting] = useState(false)
 
-  const handleExport = async (format: "csv" | "excel") => {
+  const handleExport = async (format: "csv" | "excel" | "word") => {
     setIsExporting(true)
     try {
-      const blob = format === "csv"
-        ? await exportApi.exportExpensesToCsv()
-        : await exportApi.exportExpensesToExcel()
-      const filename = `expenses_export_${new Date().toISOString().split("T")[0]}.${format === "csv" ? "csv" : "xlsx"}`
+      let blob: Blob
+      let filename: string
+      
+      if (format === "csv") {
+        blob = await exportApi.exportExpensesToCsv()
+        filename = `expenses_export_${new Date().toISOString().split("T")[0]}.csv`
+      } else if (format === "excel") {
+        blob = await exportApi.exportExpensesToExcel()
+        filename = `expenses_export_${new Date().toISOString().split("T")[0]}.xlsx`
+      } else {
+        // Word export - placeholder for future implementation
+        blob = await exportApi.exportExpensesToWord()
+        filename = `expenses_export_${new Date().toISOString().split("T")[0]}.docx`
+      }
+      
       exportApi.downloadBlob(blob, filename)
       toast({
         title: "Export successful",
@@ -286,32 +303,35 @@ export default function Expenses() {
           <h1 className="text-3xl font-bold tracking-tight">Expense Tracker</h1>
         </div>
         <div className="flex gap-2">
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => handleExport("csv")}
-            disabled={isExporting}
-          >
-            {isExporting ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            ) : (
-              <Download className="mr-2 h-4 w-4" />
-            )}
-            Export CSV
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => handleExport("excel")}
-            disabled={isExporting}
-          >
-            {isExporting ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            ) : (
-              <FileSpreadsheet className="mr-2 h-4 w-4" />
-            )}
-            Export Excel
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={isExporting}
+              >
+                {isExporting ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Download className="mr-2 h-4 w-4" />
+                )}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="bg-background">
+              <DropdownMenuItem onClick={() => handleExport("csv")} disabled={isExporting}>
+                <FileText className="mr-2 h-4 w-4" />
+                Export as CSV
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleExport("excel")} disabled={isExporting}>
+                <FileSpreadsheet className="mr-2 h-4 w-4" />
+                Export as Excel
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleExport("word")} disabled={isExporting}>
+                <FileText className="mr-2 h-4 w-4" />
+                Export as Word
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           {(expensesQuery.isError || usersQuery.isError || activitiesQuery.isError) && (
             <Button 
               variant="outline" 

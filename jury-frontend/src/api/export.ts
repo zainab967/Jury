@@ -48,6 +48,17 @@ export const exportApi = {
   },
 
   /**
+   * Export penalties to Word
+   */
+  exportPenaltiesToWord: async (userId?: string): Promise<Blob> => {
+    const url = userId ? `/export/penalties/word?userId=${userId}` : "/export/penalties/word";
+    const response = await apiClient.get(url, {
+      responseType: "blob",
+    });
+    return response.data;
+  },
+
+  /**
    * Export expenses to CSV
    */
   exportExpensesToCsv: async (userId?: string): Promise<Blob> => {
@@ -63,6 +74,17 @@ export const exportApi = {
    */
   exportExpensesToExcel: async (userId?: string): Promise<Blob> => {
     const url = userId ? `/export/expenses/excel?userId=${userId}` : "/export/expenses/excel";
+    const response = await apiClient.get(url, {
+      responseType: "blob",
+    });
+    return response.data;
+  },
+
+  /**
+   * Export expenses to Word
+   */
+  exportExpensesToWord: async (userId?: string): Promise<Blob> => {
+    const url = userId ? `/export/expenses/word?userId=${userId}` : "/export/expenses/word";
     const response = await apiClient.get(url, {
       responseType: "blob",
     });
