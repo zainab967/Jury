@@ -45,6 +45,14 @@ export default function Expenses() {
   const [totalCollectionInput, setTotalCollectionInput] = useState<string>("")
   const [billInput, setBillInput] = useState<string>("")
   const [notes, setNotes] = useState("")
+  
+  // Validation errors
+  const [errors, setErrors] = useState<{
+    totalCollection?: string
+    bill?: string
+    notes?: string
+    members?: string
+  }>({})
 
   const usersQuery = useQuery<User[]>({
     queryKey: ["users"],
@@ -112,6 +120,7 @@ export default function Expenses() {
       setTotalCollectionInput("")
       setBillInput("")
       setNotes("")
+      setErrors({})
       toast({
         title: "Expense created",
         description: "The expense record has been successfully added.",
@@ -166,27 +175,137 @@ export default function Expenses() {
     return expensesList.reduce((sum, exp) => sum + (exp.arrears || 0), 0)
   }, [expensesList])
 
+  // Validation functions
+  const validateTotalCollection = (value: string): string | undefined => {
+    if (!value.trim()) {
+      return "Total collection is required"
+    }
+    const num = Number(value)
+    if (isNaN(num)) {
+      return "Please enter a valid number"
+    }
+    if (num < 0) {
+      return "Amount cannot be negative"
+    }
+    if (num > 100000000) {
+      return "Amount is too large (max: 100,000,000)"
+    }
+    if (!/^\d+(\.\d{1,2})?$/.test(value.trim())) {
+      return "Please enter a valid amount (max 2 decimal places)"
+    }
+    return undefined
+  }
+
+  const validateBill = (value: string): string | undefined => {
+    if (!value.trim()) {
+      return "Bill amount is required"
+    }
+    const num = Number(value)
+    if (isNaN(num)) {
+      return "Please enter a valid number"
+    }
+    if (num < 0) {
+      return "Amount cannot be negative"
+    }
+    if (num > 100000000) {
+      return "Amount is too large (max: 100,000,000)"
+    }
+    if (!/^\d+(\.\d{1,2})?$/.test(value.trim())) {
+      return "Please enter a valid amount (max 2 decimal places)"
+    }
+    return undefined
+  }
+
+  const validateNotes = (value: string): string | undefined => {
+    if (value.length > 500) {
+      return "Notes cannot exceed 500 characters"
+    }
+    return undefined
+  }
+
+  const validateMembers = (members: string[]): string | undefined => {
+    if (members.length === 0) {
+      return "Please select at least one payer"
+    }
+    return undefined
+  }
+
+  // Handle input changes with validation
+  const handleTotalCollectionChange = (value: string) => {
+    // Allow empty string, numbers, and decimal point
+    if (value === "" || /^\d*\.?\d*$/.test(value)) {
+      setTotalCollectionInput(value)
+      // Clear error when user starts typing
+      if (errors.totalCollection) {
+        setErrors(prev => ({ ...prev, totalCollection: undefined }))
+      }
+    }
+  }
+
+  const handleBillChange = (value: string) => {
+    // Allow empty string, numbers, and decimal point
+    if (value === "" || /^\d*\.?\d*$/.test(value)) {
+      setBillInput(value)
+      // Clear error when user starts typing
+      if (errors.bill) {
+        setErrors(prev => ({ ...prev, bill: undefined }))
+      }
+    }
+  }
+
+  const handleNotesChange = (value: string) => {
+    if (value.length <= 500) {
+      setNotes(value)
+      // Clear error when user starts typing
+      if (errors.notes) {
+        setErrors(prev => ({ ...prev, notes: undefined }))
+      }
+    }
+  }
+
+  const handleBlurTotalCollection = () => {
+    const error = validateTotalCollection(totalCollectionInput)
+    setErrors(prev => ({ ...prev, totalCollection: error }))
+  }
+
+  const handleBlurBill = () => {
+    const error = validateBill(billInput)
+    setErrors(prev => ({ ...prev, bill: error }))
+  }
+
+  const handleBlurNotes = () => {
+    const error = validateNotes(notes)
+    setErrors(prev => ({ ...prev, notes: error }))
+  }
+
   const handleAddExpense = () => {
-    if (selectedMembers.length === 0) {
+    // Validate all fields
+    const membersError = validateMembers(selectedMembers)
+    const totalCollectionError = validateTotalCollection(totalCollectionInput)
+    const billError = validateBill(billInput)
+    const notesError = validateNotes(notes)
+
+    const newErrors = {
+      members: membersError,
+      totalCollection: totalCollectionError,
+      bill: billError,
+      notes: notesError,
+    }
+
+    setErrors(newErrors)
+
+    // If there are any errors, show toast and return
+    if (membersError || totalCollectionError || billError || notesError) {
       toast({
-        title: "Selection required",
-        description: "Please select at least one payer.",
+        title: "Validation error",
+        description: "Please fix the errors in the form before submitting.",
         variant: "destructive",
       })
       return
     }
 
-    const tc = Number(totalCollectionInput) || 0
-    const bill = Number(billInput) || 0
-
-    if (tc <= 0 || bill <= 0) {
-      toast({
-        title: "Invalid amounts",
-        description: "Please enter valid amounts for collection and bill.",
-        variant: "destructive",
-      })
-      return
-    }
+    const tc = Number(totalCollectionInput)
+    const bill = Number(billInput)
 
     const arrears = tc - bill
     const status: "completed" | "pending" | "deficit" = 
@@ -448,7 +567,9 @@ export default function Expenses() {
             {/* Select payers like penalties: choose all or specific members */}
             <div className="space-y-2">
               <Label>Select Payers</Label>
-              <div className="border rounded-lg p-4 max-h-48 overflow-y-auto">
+              <div className={`border rounded-lg p-4 max-h-48 overflow-y-auto ${
+                errors.members ? "border-destructive" : ""
+              }`}>
                 <div className="flex items-center space-x-2 mb-3 pb-2 border-b">
                   <input
                     type="checkbox"
@@ -461,6 +582,10 @@ export default function Expenses() {
                         setSelectedMembers(users.map(u => u.id)); 
                       }
                       setSelectAll(!selectAll)
+                      // Clear error when selection changes
+                      if (errors.members) {
+                        setErrors(prev => ({ ...prev, members: undefined }))
+                      }
                     }}
                     className="rounded"
                     disabled={createExpenseMutation.isPending || usersQuery.isLoading}
@@ -487,11 +612,14 @@ export default function Expenses() {
                           id={`payer-${user.id}`}
                           checked={selectedMembers.includes(user.id)}
                           onChange={() => {
-                            setSelectedMembers(prev => 
-                              prev.includes(user.id) 
-                                ? prev.filter(id => id !== user.id) 
-                                : [...prev, user.id]
-                            )
+                            const newMembers = selectedMembers.includes(user.id) 
+                              ? selectedMembers.filter(id => id !== user.id) 
+                              : [...selectedMembers, user.id]
+                            setSelectedMembers(newMembers)
+                            // Clear error when selection changes
+                            if (errors.members && newMembers.length > 0) {
+                              setErrors(prev => ({ ...prev, members: undefined }))
+                            }
                           }}
                           className="rounded"
                           disabled={createExpenseMutation.isPending}
@@ -502,37 +630,58 @@ export default function Expenses() {
                   )}
                 </div>
               </div>
-              {selectedMembers.length > 0 && (
+              {errors.members && (
+                <p className="text-xs font-medium text-destructive mt-0.5">{errors.members}</p>
+              )}
+              {selectedMembers.length > 0 && !errors.members && (
                 <p className="text-sm text-muted-foreground">
-                  Selected: {selectedMembers.join(", ")}
+                  Selected: {selectedMembers.length} payer(s)
                 </p>
               )}
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-              <Label htmlFor="total-collection">Total Collection</Label>
+                <Label htmlFor="total-collection">Total Collection</Label>
                 <Input 
                   id="total-collection" 
-                type="number" 
-                placeholder="0" 
-                min="0"
-                value={totalCollectionInput}
-                onChange={(e) => setTotalCollectionInput(e.target.value)}
-                disabled={createExpenseMutation.isPending}
+                  type="text"
+                  inputMode="decimal"
+                  placeholder="0.00" 
+                  value={totalCollectionInput}
+                  onChange={(e) => handleTotalCollectionChange(e.target.value)}
+                  onBlur={handleBlurTotalCollection}
+                  disabled={createExpenseMutation.isPending}
+                  className={errors.totalCollection ? "border-destructive focus-visible:ring-destructive" : ""}
+                  aria-invalid={!!errors.totalCollection}
+                  aria-describedby={errors.totalCollection ? "total-collection-error" : undefined}
                 />
+                {errors.totalCollection && (
+                  <p id="total-collection-error" className="text-xs font-medium text-destructive mt-0.5">
+                    {errors.totalCollection}
+                  </p>
+                )}
               </div>
               <div className="space-y-2">
                 <Label htmlFor="bill">Bill Amount</Label>
                 <Input 
                   id="bill" 
-                  type="number" 
-                  placeholder="0" 
-                  min="0"
+                  type="text"
+                  inputMode="decimal"
+                  placeholder="0.00" 
                   value={billInput}
-                  onChange={(e) => setBillInput(e.target.value)}
+                  onChange={(e) => handleBillChange(e.target.value)}
+                  onBlur={handleBlurBill}
                   disabled={createExpenseMutation.isPending}
+                  className={errors.bill ? "border-destructive focus-visible:ring-destructive" : ""}
+                  aria-invalid={!!errors.bill}
+                  aria-describedby={errors.bill ? "bill-error" : undefined}
                 />
+                {errors.bill && (
+                  <p id="bill-error" className="text-xs font-medium text-destructive mt-0.5">
+                    {errors.bill}
+                  </p>
+                )}
               </div>
             </div>
 
@@ -543,9 +692,26 @@ export default function Expenses() {
                 placeholder="Additional notes about the expense..."
                 rows={3}
                 value={notes}
-                onChange={(e) => setNotes(e.target.value)}
+                onChange={(e) => handleNotesChange(e.target.value)}
+                onBlur={handleBlurNotes}
                 disabled={createExpenseMutation.isPending}
+                className={errors.notes ? "border-destructive focus-visible:ring-destructive" : ""}
+                aria-invalid={!!errors.notes}
+                aria-describedby={errors.notes ? "notes-error" : undefined}
+                maxLength={500}
               />
+              <div className="flex items-center justify-between">
+                {errors.notes ? (
+                  <p id="notes-error" className="text-xs font-medium text-destructive mt-0.5">
+                    {errors.notes}
+                  </p>
+                ) : (
+                  <div />
+                )}
+                <p className="text-xs text-muted-foreground">
+                  {notes.length}/500 characters
+                </p>
+              </div>
             </div>
             
             <Button 

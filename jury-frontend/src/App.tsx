@@ -17,6 +17,7 @@ import Tiers from "./pages/Tiers";
 import NotFound from "./pages/NotFound";
 import Login from "./pages/Login";
 import { ProtectedRoute } from "./components/ProtectedRoute";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -65,65 +66,89 @@ function AuthHandler() {
 }
 
 const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <ThemeProvider defaultTheme="system" storageKey="jury-tracker-theme">
-      <UserProvider>
-        <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <BrowserRouter>
-          <AuthHandler />
-          <Routes>
-            <Route path="/login" element={<Login />} />
-            <Route path="/" element={
-              <ProtectedRoute>
-                <Layout>
-                  <Dashboard />
-                </Layout>
-              </ProtectedRoute>
-            } />
-            <Route path="/penalties" element={
-              <ProtectedRoute requireJury={true}>
-                <Layout>
-                  <Penalties />
-                </Layout>
-              </ProtectedRoute>
-            } />
-            <Route path="/activities" element={
-              <ProtectedRoute requireJury={true}>
-                <Layout>
-                  <Activities />
-                </Layout>
-              </ProtectedRoute>
-            } />
-            <Route path="/expenses" element={
-              <ProtectedRoute requireJury={true}>
-                <Layout>
-                  <Expenses />
-                </Layout>
-              </ProtectedRoute>
-            } />
-            <Route path="/logs" element={
-              <ProtectedRoute requireJury={true}>
-                <Layout>
-                  <Logs />
-                </Layout>
-              </ProtectedRoute>
-            } />
-            <Route path="/tiers" element={
-              <ProtectedRoute requireJury={true}>
-                <Layout>
-                  <Tiers />
-                </Layout>
-              </ProtectedRoute>
-            } />
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </BrowserRouter>
-        </TooltipProvider>
-      </UserProvider>
-    </ThemeProvider>
-  </QueryClientProvider>
+  <ErrorBoundary>
+    <QueryClientProvider client={queryClient}>
+      <ThemeProvider defaultTheme="system" storageKey="jury-tracker-theme">
+        <UserProvider>
+          <TooltipProvider>
+          <Toaster />
+          <Sonner />
+          <BrowserRouter>
+            <ErrorBoundary>
+              <AuthHandler />
+              <Routes>
+                <Route path="/login" element={
+                  <ErrorBoundary>
+                    <Login />
+                  </ErrorBoundary>
+                } />
+                <Route path="/" element={
+                  <ProtectedRoute>
+                    <Layout>
+                      <ErrorBoundary>
+                        <Dashboard />
+                      </ErrorBoundary>
+                    </Layout>
+                  </ProtectedRoute>
+                } />
+                <Route path="/penalties" element={
+                  <ProtectedRoute requireJury={true}>
+                    <Layout>
+                      <ErrorBoundary>
+                        <Penalties />
+                      </ErrorBoundary>
+                    </Layout>
+                  </ProtectedRoute>
+                } />
+                <Route path="/activities" element={
+                  <ProtectedRoute requireJury={true}>
+                    <Layout>
+                      <ErrorBoundary>
+                        <Activities />
+                      </ErrorBoundary>
+                    </Layout>
+                  </ProtectedRoute>
+                } />
+                <Route path="/expenses" element={
+                  <ProtectedRoute requireJury={true}>
+                    <Layout>
+                      <ErrorBoundary>
+                        <Expenses />
+                      </ErrorBoundary>
+                    </Layout>
+                  </ProtectedRoute>
+                } />
+                <Route path="/logs" element={
+                  <ProtectedRoute requireJury={true}>
+                    <Layout>
+                      <ErrorBoundary>
+                        <Logs />
+                      </ErrorBoundary>
+                    </Layout>
+                  </ProtectedRoute>
+                } />
+                <Route path="/tiers" element={
+                  <ProtectedRoute requireJury={true}>
+                    <Layout>
+                      <ErrorBoundary>
+                        <Tiers />
+                      </ErrorBoundary>
+                    </Layout>
+                  </ProtectedRoute>
+                } />
+                <Route path="*" element={
+                  <ErrorBoundary>
+                    <NotFound />
+                  </ErrorBoundary>
+                } />
+              </Routes>
+            </ErrorBoundary>
+          </BrowserRouter>
+          </TooltipProvider>
+        </UserProvider>
+      </ThemeProvider>
+    </QueryClientProvider>
+  </ErrorBoundary>
 );
 
 export default App;
