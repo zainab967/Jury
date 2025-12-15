@@ -8,6 +8,7 @@ using JuryApi.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.AspNetCore.HttpsPolicy;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -108,6 +109,20 @@ try
         });
     });
 
+    // Configure HTTPS and HSTS
+    builder.Services.AddHsts(options =>
+    {
+        options.Preload = true;
+        options.IncludeSubDomains = true;
+        options.MaxAge = TimeSpan.FromDays(365); // 1 year
+    });
+
+    builder.Services.AddHttpsRedirection(options =>
+    {
+        options.RedirectStatusCode = StatusCodes.Status307TemporaryRedirect;
+        options.HttpsPort = 443; // Default HTTPS port
+    });
+
     var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
                           ?? throw new InvalidOperationException("Database connection string 'DefaultConnection' is not configured.");
 
@@ -205,14 +220,23 @@ try
 
     app.UseRouting();
     
+    // Security headers middleware (should be early in pipeline, before CORS)
+    app.UseMiddleware<SecurityHeadersMiddleware>();
+    
     // CORS must be before UseHttpsRedirection to avoid preflight redirect issues
     app.UseCors("FrontendPolicy");
     
-    // Disable HTTPS redirection in development to avoid CORS preflight issues
-    // HTTPS redirection causes "Redirect is not allowed for a preflight request" error
+    // HTTPS redirection and HSTS
     if (!app.Environment.IsDevelopment())
     {
+        // In production, enforce HTTPS
         app.UseHttpsRedirection();
+        app.UseHsts(); // HTTP Strict Transport Security
+    }
+    else
+    {
+        // In development, HTTPS redirection is disabled to avoid CORS preflight issues
+        // If you have a valid certificate for localhost, you can enable it
     }
     
     // Always use authentication middleware if auth is enabled
